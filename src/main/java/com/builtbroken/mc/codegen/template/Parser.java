@@ -1,4 +1,4 @@
-package com.builtbroken.mc.codegen.processors;
+package com.builtbroken.mc.codegen.template;
 
 import java.util.ArrayList;
 import java.util.List;

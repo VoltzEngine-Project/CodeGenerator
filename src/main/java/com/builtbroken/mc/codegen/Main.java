@@ -1,9 +1,12 @@
 package com.builtbroken.mc.codegen;
 
-import com.builtbroken.mc.codegen.processors.Parser;
-import com.builtbroken.mc.codegen.processors.Template;
+import com.builtbroken.mc.codegen.processor.Processor;
+import com.builtbroken.mc.codegen.template.Parser;
 
-import java.io.*;
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileReader;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -17,7 +20,6 @@ import java.util.regex.Pattern;
 public class Main
 {
     public static Pattern packagePattern = Pattern.compile("package(.*?);");
-    public static final String TILE_WRAPPER_ANNOTATION = "TileWrapped";
 
     public static void main(String... args)
     {
@@ -92,7 +94,7 @@ public class Main
                 out("");
                 out("Loading templates from " + templateFolder);
                 //Load processors
-                HashMap<String, Template> processors = getProcessors(templateFolder, 0);
+                List<Processor> processors = new ArrayList();
 
                 //Ensure we have templates to use
                 if (processors.isEmpty())
@@ -130,14 +132,21 @@ public class Main
     {
         System.err.println(msg);
         t.printStackTrace();
+        System.exit(1);
     }
 
     public static void error(String msg)
     {
         System.err.println(msg);
+        System.exit(1);
     }
 
-    public static void handleDirectory(File directory, HashMap<String, Template> processors, File outputFolder, int depth)
+    public static void warn(String msg)
+    {
+        System.err.println(msg);
+    }
+
+    public static void handleDirectory(File directory, List<Processor> processors, File outputFolder, int depth)
     {
         //Generate spacer to make debug look nice
         String spacer;
@@ -176,7 +185,7 @@ public class Main
         }
     }
 
-    public static void handleFile(File file, HashMap<String, Template> allProcessors, File outputFolder, String spacer) throws IOException
+    public static void handleFile(File file, List<Processor> allProcessors, File outputFolder, String spacer) throws IOException
     {
         String fileClassName = file.getName();
         if (fileClassName.endsWith(".java"))
@@ -235,282 +244,17 @@ public class Main
                 annotationToData.put(annotation, data);
             }
 
-            //Process annotations
-            if (annotationToData.containsKey(TILE_WRAPPER_ANNOTATION))
+            for(Processor processor : allProcessors)
             {
-                String[] data = annotationToData.get(TILE_WRAPPER_ANNOTATION).split(",");
-                String id = null;
-                String className = null;
-                for (String s : data)
+                if(annotationToData.containsKey(processor.annotationKey))
                 {
-                    if (s.contains("id"))
-                    {
-                        id = s.split("=")[1].replace("\"", "").trim();
-                    }
-                    else if (s.contains("className"))
-                    {
-                        className = s.split("=")[1].replace("\"", "").trim();
-                    }
+                    processor.handleFile(outputFolder, annotationToData, classPackage, fileClassName, spacer);
                 }
-
-                //Ensure we have an ID
-                if (id == null)
-                {
-                    throw new RuntimeException("Missing id from " + TILE_WRAPPER_ANNOTATION + " annotation");
-                }
-                //Ensure we have a class name
-                if (className == null)
-                {
-                    throw new RuntimeException("Missing className from " + TILE_WRAPPER_ANNOTATION + " annotation");
-                }
-
-                //Get template processors for this file
-                List<Template> templates = new ArrayList();
-                for (String key : annotationToData.keySet())
-                {
-                    if (allProcessors.containsKey(key))
-                    {
-                        templates.add(allProcessors.get(key));
-                    }
-                }
-
-                //If no templates are required use the empty template
-                if (templates.isEmpty())
-                {
-                    templates.add(allProcessors.get("Empty"));
-                }
-
-                //Start building file
-                StringBuilder builder = new StringBuilder();
-                builder.append("//THIS IS A GENERATED CLASS FILE\n");
-                builder.append("package " + classPackage + ";\n");
-                builder.append("\n");
-
-                createImports(builder, templates);
-                builder.append("\n");
-
-                createClassHeader(builder, className, templates);
-                builder.append("\n{\n");
-
-                //Create constructor
-                builder.append("\tpublic ");
-                builder.append(className);
-                builder.append("()\n\t{");
-                builder.append("\n\t\tsuper(new ");
-                builder.append(fileClassName);
-                builder.append("());\n");
-                builder.append("\t}\n\n");
-
-                createBody(builder, templates);
-                builder.append("}");
-
-                //Write file to disk
-                try
-                {
-                    File outFile = new File(outputFolder, classPackage.replace(".", File.separator) + File.separator + className + ".java");
-                    out(spacer + "  Writing file to disk, file = " + outFile);
-                    if (!outFile.getParentFile().exists())
-                    {
-                        outFile.getParentFile().mkdirs();
-                        out(spacer + "   Created directories");
-                    }
-                    else if (outFile.exists())
-                    {
-                        out(spacer + "   Overriding existing file");
-                    }
-
-                    FileWriter fileWriter = new FileWriter(outFile);
-                    fileWriter.write(builder.toString());
-                    fileWriter.flush();
-                    fileWriter.close();
-                }
-                catch (Exception e)
-                {
-                    error(spacer + "    Error writing file", e);
-                    System.exit(1);
-                }
-            }
-            else
-            {
-                out(spacer + "  Does not contain " + TILE_WRAPPER_ANNOTATION);
             }
             //TODO build list of all generated data to be registered
         }
     }
 
-    public static void createImports(StringBuilder builder, List<Template> templates)
-    {
-        List<String> imports = new ArrayList();
-        //Add ignored files
-        imports.add("com.builtbroken.mc.codegen.processors.TileWrappedTemplate");
-
-        //Check if we can ignore imports
-        boolean containsITileNodeImport = false;
-        for (Template template : templates)
-        {
-            if (template.fieldBody != null && template.fieldBody.contains("ITileNode"))
-            {
-                containsITileNodeImport = true;
-                break;
-            }
-            if (template.methodBody != null && template.methodBody.contains("ITileNode"))
-            {
-                containsITileNodeImport = true;
-                break;
-            }
-        }
-
-        if (!containsITileNodeImport)
-        {
-            imports.add("com.builtbroken.mc.framework.logic.ITileNode");
-        }
-
-        //Add imports
-        for (Template template : templates)
-        {
-            List<String> importsFromProcessor = template.getImports();
-            for (String imp : importsFromProcessor)
-            {
-                //Prevent duplication
-                if (!imports.contains(imp))
-                {
-                    imports.add(imp);
-                    builder.append("import ");
-                    builder.append(imp);
-                    builder.append(";\n");
-                }
-            }
-        }
-
-    }
-
-    public static void createClassHeader(StringBuilder builder, String className, List<Template> templates)
-    {
-        //TODO implement annotations
-        //Create header
-        builder.append("public class " + className + " extends TileEntityWrapper");
-
-        //Add implements
-        List<String> interfaces = new ArrayList();
-
-        for (Template template : templates)
-        {
-            List<String> interfacesFromProcessor = template.getInterfaces();
-            for (String imp : interfacesFromProcessor)
-            {
-                //Prevent duplication
-                if (!interfaces.contains(imp))
-                {
-                    interfaces.add(imp);
-                }
-            }
-        }
-        if (!interfaces.isEmpty())
-        {
-            builder.append(" implements ");
-            for (int i = 0; i < interfaces.size(); i++)
-            {
-                builder.append(interfaces.get(i));
-                if (i != (interfaces.size() - 1))
-                {
-                    builder.append(", ");
-                }
-            }
-        }
-    }
-
-    public static void createBody(StringBuilder builder, List<Template> templates)
-    {
-        for (Template template : templates)
-        {
-            if (template.fieldBody != null)
-            {
-                builder.append("\t//Fields from ");
-                builder.append(template.getKey());
-                builder.append("\n");
-
-                String[] fields = template.fieldBody.split(";");
-                for (String field : fields)
-                {
-                    if (!field.isEmpty())
-                    {
-                        builder.append("\t");
-                        builder.append(field.trim());
-                        builder.append(";\n");
-                    }
-                }
-            }
-        }
-
-        for (Template template : templates)
-        {
-            if (template.methodBody != null)
-            {
-                builder.append("\t//============================\n\t//==Methods:");
-                builder.append(template.getKey());
-                builder.append("\n\t//============================\n");
-                builder.append("\n");
-
-                builder.append(template.methodBody);
-                builder.append("\n");
-            }
-        }
-    }
-
-    public static HashMap<String, Template> getProcessors(File directory, int depth)
-    {
-        String spacer;
-        StringBuilder builder = new StringBuilder();
-        for (int i = 0; i <= depth; i++)
-        {
-            builder.append("  ");
-        }
-        spacer = builder.toString();
-
-        out(spacer + "*Directory: " + directory.getName());
-
-        HashMap<String, Template> map = new HashMap();
-        File[] files = directory.listFiles();
-        for (File file : files)
-        {
-            if (file.isDirectory())
-            {
-                map.putAll(getProcessors(file, ++depth));
-            }
-            else
-            {
-                out("");
-                out(spacer + "--File: " + file.getName());
-                out(spacer + " |------------------------->");
-                Template template = new Template();
-                try
-                {
-
-                    template = template.loadFile(file, spacer + " | ");
-                    //If returns null the file was not a template
-                    if (template != null)
-                    {
-                        if (template.isValid())
-                        {
-                            map.put(template.getKey(), template);
-                        }
-                        else
-                        {
-                            out("Template file is invalid, exiting to prevent issues " + file);
-                            System.exit(1);
-                        }
-                    }
-                }
-                catch (Exception e)
-                {
-                    error("Unexpected error while loading template from file " + file, e);
-                    System.exit(1);
-                }
-                out(spacer + " |------------------------->");
-            }
-        }
-        return map;
-    }
 
     /**
      * Converts arguments into a hashmap for usage

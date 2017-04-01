@@ -1,4 +1,4 @@
-package com.builtbroken.mc.codegen.processors;
+package com.builtbroken.mc.codegen.template;
 
 import com.builtbroken.mc.codegen.Main;
 
@@ -140,7 +140,7 @@ public class Template
                     if (line.contains("//"))
                     {
                         line = line.substring(0, line.indexOf("/"));
-                        Main.error("Found comment '" + line.substring(line.indexOf("/"), line.length()) + "' nested inside class header, commends should not be nested inside the class header. Remove these to improve class parsing and to improve readability.");
+                        Main.warn("Found comment '" + line.substring(line.indexOf("/"), line.length()) + "' nested inside class header, commends should not be nested inside the class header. Remove these to improve class parsing and to improve readability.");
 
                     }
                     if (line.contains("{"))
@@ -168,7 +168,7 @@ public class Template
                 {
                     String comment = "/*" + matcher.group(i) + "*/";
                     string = string.replace(comment, "");
-                    Main.error(spacer + "Found comment '" + comment + "' nested inside class header, commends should not be nested inside the class header. Remove these to improve class parsing and to improve readability.");
+                    Main.warn(spacer + "Found comment '" + comment + "' nested inside class header, commends should not be nested inside the class header. Remove these to improve class parsing and to improve readability.");
                 }
             }
 
