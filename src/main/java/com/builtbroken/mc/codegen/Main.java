@@ -29,11 +29,11 @@ public class Main
         //Load arguments
         HashMap<String, String> launchSettings = loadArgs(args);
 
-        if (launchSettings.containsKey("src") && launchSettings.containsKey("templates") && launchSettings.containsKey("output"))
+        if (launchSettings.containsKey("src") && launchSettings.containsKey("templates") && launchSettings.containsKey("output") && launchSettings.containsKey("processors"))
         {
             File runFolder = new File(".");
             File targetFolder;
-            File templateFolder;
+            List<File> templateFolders = new ArrayList();
             File outputFolder;
 
             //Get source folder path
@@ -47,17 +47,35 @@ public class Main
                 targetFolder = new File(path);
             }
 
-            //Get template folder path
-            path = launchSettings.get("templates");
-            if (path.startsWith("."))
+            //Load template folders
+            String[] folders = launchSettings.get("templates").split(",");
+            for (String folder : folders)
             {
-                templateFolder = new File(runFolder, path.substring(1, path.length()));
+                File file;
+                if (folder.startsWith("."))
+                {
+                    file = new File(runFolder, folder.substring(1, folder.length()));
+                }
+                else
+                {
+                    file = new File(path);
+                }
+                //Ensure we have a template folder
+                if (!file.exists() || !file.isDirectory())
+                {
+                    error("The template folder '" + file + "' does not exist.");
+                }
+                else
+                {
+                    templateFolders.add(file);
+                }
             }
-            else
+            if (templateFolders.isEmpty())
             {
-                templateFolder = new File(path);
+                error("No template folders were loaded, can not continue as processors will have noting to generate.");
             }
 
+            //Get output folder
             path = launchSettings.get("output");
             if (path.startsWith("."))
             {
@@ -66,14 +84,6 @@ public class Main
             else
             {
                 outputFolder = new File(path);
-            }
-
-
-            //Ensure we have a template folder
-            if (!templateFolder.exists() || !templateFolder.isDirectory())
-            {
-                out("The template folder does not exist. Folder: " + templateFolder);
-                System.exit(1);
             }
 
             //Ensure we have an output folder
@@ -92,15 +102,47 @@ public class Main
             if (targetFolder.exists() && targetFolder.isDirectory())
             {
                 out("");
-                out("Loading templates from " + templateFolder);
                 //Load processors
                 List<Processor> processors = new ArrayList();
+
+                String[] processorEntries = launchSettings.get("processors").split(",");
+                for (String processorEntry : processorEntries)
+                {
+                    try
+                    {
+                        Class clazz = Class.forName(processorEntry);
+                        Processor processor = (Processor) clazz.newInstance();
+                        processors.add(processor);
+                    }
+                    catch (ClassNotFoundException e)
+                    {
+                        error("Failed to locate processor class " + processorEntry, e);
+                    }
+                    catch (InstantiationException e)
+                    {
+                        error("Failed to create processor object " + processorEntry, e);
+                    }
+                    catch (IllegalAccessException e)
+                    {
+                        error("Failed to access processor class " + processorEntry, e);
+                    }
+                }
 
                 //Ensure we have templates to use
                 if (processors.isEmpty())
                 {
                     out("No templates were loaded, can not continue with templates to use");
                     System.exit(1);
+                }
+
+                for (Processor processor : processors)
+                {
+                    out("Initializing processor: " + processor);
+                    for (File file : templateFolders)
+                    {
+                        out("Loading templates from " + file);
+                        processor.loadTemplates(file, 0);
+                    }
                 }
 
                 //Load classes
@@ -244,9 +286,9 @@ public class Main
                 annotationToData.put(annotation, data);
             }
 
-            for(Processor processor : allProcessors)
+            for (Processor processor : allProcessors)
             {
-                if(annotationToData.containsKey(processor.annotationKey))
+                if (annotationToData.containsKey(processor.annotationKey))
                 {
                     processor.handleFile(outputFolder, annotationToData, classPackage, fileClassName, spacer);
                 }
