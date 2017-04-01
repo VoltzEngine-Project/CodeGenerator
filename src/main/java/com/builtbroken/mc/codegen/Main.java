@@ -1,7 +1,7 @@
 package com.builtbroken.mc.codegen;
 
 import com.builtbroken.mc.codegen.processors.Parser;
-import com.builtbroken.mc.codegen.processors.Processor;
+import com.builtbroken.mc.codegen.processors.Template;
 
 import java.io.*;
 import java.util.ArrayList;
@@ -92,7 +92,7 @@ public class Main
                 out("");
                 out("Loading templates from " + templateFolder);
                 //Load processors
-                HashMap<String, Processor> processors = getProcessors(templateFolder, 0);
+                HashMap<String, Template> processors = getProcessors(templateFolder, 0);
 
                 //Ensure we have templates to use
                 if (processors.isEmpty())
@@ -137,7 +137,7 @@ public class Main
         System.err.println(msg);
     }
 
-    public static void handleDirectory(File directory, HashMap<String, Processor> processors, File outputFolder, int depth)
+    public static void handleDirectory(File directory, HashMap<String, Template> processors, File outputFolder, int depth)
     {
         //Generate spacer to make debug look nice
         String spacer;
@@ -176,7 +176,7 @@ public class Main
         }
     }
 
-    public static void handleFile(File file, HashMap<String, Processor> allProcessors, File outputFolder, String spacer) throws IOException
+    public static void handleFile(File file, HashMap<String, Template> allProcessors, File outputFolder, String spacer) throws IOException
     {
         String fileClassName = file.getName();
         if (fileClassName.endsWith(".java"))
@@ -265,19 +265,19 @@ public class Main
                 }
 
                 //Get template processors for this file
-                List<Processor> processors = new ArrayList();
+                List<Template> templates = new ArrayList();
                 for (String key : annotationToData.keySet())
                 {
                     if (allProcessors.containsKey(key))
                     {
-                        processors.add(allProcessors.get(key));
+                        templates.add(allProcessors.get(key));
                     }
                 }
 
                 //If no templates are required use the empty template
-                if (processors.isEmpty())
+                if (templates.isEmpty())
                 {
-                    processors.add(allProcessors.get("Empty"));
+                    templates.add(allProcessors.get("Empty"));
                 }
 
                 //Start building file
@@ -286,10 +286,10 @@ public class Main
                 builder.append("package " + classPackage + ";\n");
                 builder.append("\n");
 
-                createImports(builder, processors);
+                createImports(builder, templates);
                 builder.append("\n");
 
-                createClassHeader(builder, className, processors);
+                createClassHeader(builder, className, templates);
                 builder.append("\n{\n");
 
                 //Create constructor
@@ -301,7 +301,7 @@ public class Main
                 builder.append("());\n");
                 builder.append("\t}\n\n");
 
-                createBody(builder, processors);
+                createBody(builder, templates);
                 builder.append("}");
 
                 //Write file to disk
@@ -338,7 +338,7 @@ public class Main
         }
     }
 
-    public static void createImports(StringBuilder builder, List<Processor> processors)
+    public static void createImports(StringBuilder builder, List<Template> templates)
     {
         List<String> imports = new ArrayList();
         //Add ignored files
@@ -346,14 +346,14 @@ public class Main
 
         //Check if we can ignore imports
         boolean containsITileNodeImport = false;
-        for (Processor processor : processors)
+        for (Template template : templates)
         {
-            if (processor.fieldBody != null && processor.fieldBody.contains("ITileNode"))
+            if (template.fieldBody != null && template.fieldBody.contains("ITileNode"))
             {
                 containsITileNodeImport = true;
                 break;
             }
-            if (processor.methodBody != null && processor.methodBody.contains("ITileNode"))
+            if (template.methodBody != null && template.methodBody.contains("ITileNode"))
             {
                 containsITileNodeImport = true;
                 break;
@@ -366,9 +366,9 @@ public class Main
         }
 
         //Add imports
-        for (Processor processor : processors)
+        for (Template template : templates)
         {
-            List<String> importsFromProcessor = processor.getImports();
+            List<String> importsFromProcessor = template.getImports();
             for (String imp : importsFromProcessor)
             {
                 //Prevent duplication
@@ -384,7 +384,7 @@ public class Main
 
     }
 
-    public static void createClassHeader(StringBuilder builder, String className, List<Processor> processors)
+    public static void createClassHeader(StringBuilder builder, String className, List<Template> templates)
     {
         //TODO implement annotations
         //Create header
@@ -393,9 +393,9 @@ public class Main
         //Add implements
         List<String> interfaces = new ArrayList();
 
-        for (Processor processor : processors)
+        for (Template template : templates)
         {
-            List<String> interfacesFromProcessor = processor.getInterfaces();
+            List<String> interfacesFromProcessor = template.getInterfaces();
             for (String imp : interfacesFromProcessor)
             {
                 //Prevent duplication
@@ -419,17 +419,17 @@ public class Main
         }
     }
 
-    public static void createBody(StringBuilder builder, List<Processor> processors)
+    public static void createBody(StringBuilder builder, List<Template> templates)
     {
-        for (Processor processor : processors)
+        for (Template template : templates)
         {
-            if (processor.fieldBody != null)
+            if (template.fieldBody != null)
             {
                 builder.append("\t//Fields from ");
-                builder.append(processor.getKey());
+                builder.append(template.getKey());
                 builder.append("\n");
 
-                String[] fields = processor.fieldBody.split(";");
+                String[] fields = template.fieldBody.split(";");
                 for (String field : fields)
                 {
                     if (!field.isEmpty())
@@ -442,22 +442,22 @@ public class Main
             }
         }
 
-        for (Processor processor : processors)
+        for (Template template : templates)
         {
-            if (processor.methodBody != null)
+            if (template.methodBody != null)
             {
                 builder.append("\t//============================\n\t//==Methods:");
-                builder.append(processor.getKey());
+                builder.append(template.getKey());
                 builder.append("\n\t//============================\n");
                 builder.append("\n");
 
-                builder.append(processor.methodBody);
+                builder.append(template.methodBody);
                 builder.append("\n");
             }
         }
     }
 
-    public static HashMap<String, Processor> getProcessors(File directory, int depth)
+    public static HashMap<String, Template> getProcessors(File directory, int depth)
     {
         String spacer;
         StringBuilder builder = new StringBuilder();
@@ -469,7 +469,7 @@ public class Main
 
         out(spacer + "*Directory: " + directory.getName());
 
-        HashMap<String, Processor> map = new HashMap();
+        HashMap<String, Template> map = new HashMap();
         File[] files = directory.listFiles();
         for (File file : files)
         {
@@ -482,17 +482,17 @@ public class Main
                 out("");
                 out(spacer + "--File: " + file.getName());
                 out(spacer + " |------------------------->");
-                Processor processor = new Processor();
+                Template template = new Template();
                 try
                 {
 
-                    processor = processor.loadFile(file, spacer + " | ");
+                    template = template.loadFile(file, spacer + " | ");
                     //If returns null the file was not a template
-                    if (processor != null)
+                    if (template != null)
                     {
-                        if (processor.isValid())
+                        if (template.isValid())
                         {
-                            map.put(processor.getKey(), processor);
+                            map.put(template.getKey(), template);
                         }
                         else
                         {

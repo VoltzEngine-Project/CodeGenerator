@@ -15,7 +15,7 @@ import java.util.regex.Pattern;
  * @see <a href="https://github.com/BuiltBrokenModding/VoltzEngine/blob/development/license.md">License</a> for what you can and can't do with the code.
  * Created by Dark(DarkGuardsman, Robert) on 4/1/2017.
  */
-public class Processor
+public class Template
 {
     //regex101.com <- used to test pattterns, great site
     public static Pattern importPattern = Pattern.compile("import(.*?);");
@@ -45,7 +45,7 @@ public class Processor
      * @return
      * @throws IOException
      */
-    public Processor loadFile(File file, String spacer) throws IOException
+    public Template loadFile(File file, String spacer) throws IOException
     {
         //TODO load the file
         //TODO parse out all data
