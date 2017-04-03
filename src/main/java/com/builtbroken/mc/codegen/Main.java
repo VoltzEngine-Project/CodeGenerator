@@ -112,6 +112,7 @@ public class Main
                     {
                         Class clazz = Class.forName(processorEntry);
                         Processor processor = (Processor) clazz.newInstance();
+                        processor.initialized(launchSettings);
                         processors.add(processor);
                     }
                     catch (ClassNotFoundException e)
@@ -131,8 +132,7 @@ public class Main
                 //Ensure we have templates to use
                 if (processors.isEmpty())
                 {
-                    out("No templates were loaded, can not continue with templates to use");
-                    System.exit(1);
+                    error("No templates were loaded, can not continue with templates to use");
                 }
 
                 for (Processor processor : processors)
@@ -149,17 +149,25 @@ public class Main
                 out("");
                 out("Loading classes from " + targetFolder);
                 handleDirectory(targetFolder, processors, outputFolder, 0);
+
+                out("");
+                out("Finalizing data");
+                for (Processor processor : processors)
+                {
+                    processor.finialize(outputFolder);
+                }
             }
             else
             {
-                out("The target folder does not exist. Folder: " + targetFolder);
-                System.exit(1);
+                error("The target folder does not exist. Folder: " + targetFolder);
             }
         }
         else
         {
-            out("In order for code to be parsed and generator you need to specify in the program arguments: -src=\"path/to/source/files\" -templates=\"path/to/source/templates\" -output=\"path/to/source/output\"");
-            System.exit(1);
+            error("In order for the program to function you need to specify in the program arguments: " +
+                    "-src=\"path/to/source/files\" " +
+                    "-templates=\"path/to/source/templates\"" +
+                    " -output=\"path/to/source/output\"");
         }
 
         out("Exiting...");

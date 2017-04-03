@@ -30,6 +30,17 @@ public abstract class Processor
     }
 
     /**
+     * Called to load additional settings for this processor
+     * from program arguments.
+     *
+     * @param arguments - map of argument to value
+     */
+    public void initialized(HashMap<String, String> arguments)
+    {
+
+    }
+
+    /**
      * Called to handle a file
      *
      * @param outputFolder  - folder to output the file to, this is the global src folder not the exact file
@@ -40,6 +51,19 @@ public abstract class Processor
      * @throws IOException
      */
     public abstract void handleFile(File outputFolder, HashMap<String, String> annotations, String classPackage, String fileClassName, String spacer) throws IOException;
+
+    /**
+     * Called to do any actions that need to wait until all files have
+     * been processed.
+     * <p>
+     * This is normally used to generate registry files.
+     *
+     * @param outputFolder
+     */
+    public void finialize(File outputFolder)
+    {
+
+    }
 
     /**
      * Called to build the file and write it to disk
@@ -64,7 +88,7 @@ public abstract class Processor
         builder.append("\n");
 
         //Write imports
-        createImports(builder, templates);
+        createImports(builder, templates, className, fileClassName, classPackage);
         builder.append("\n");
 
         //Write class header
@@ -114,13 +138,45 @@ public abstract class Processor
      *
      * @param builder
      * @param templates
+     * @param className
+     * @param fileClassName
+     * @param classPackage
      */
-    protected void createImports(StringBuilder builder, List<Template> templates)
+    protected void createImports(StringBuilder builder, List<Template> templates, String className, String fileClassName, String classPackage)
     {
-        List<String> imports = new ArrayList();
-        collectIgnoredImports(imports, templates);
+        //Get imports to use
+        final List<String> imports = new ArrayList();
+        //Add import to class we are wrapping
+        imports.add(classPackage + fileClassName);
+        collectImports(imports, templates);
 
-        //Add imports
+        //Get imports to ignore
+        final List<String> ignored = new ArrayList();
+        collectIgnoredImports(ignored, templates);
+
+        //TODO ensure all imports are used
+
+        //Output imports
+        for (String imp : imports)
+        {
+            if (!ignored.contains(imp))
+            {
+                imports.add(imp);
+                builder.append("import ");
+                builder.append(imp);
+                builder.append(";\n");
+            }
+        }
+    }
+
+    /**
+     * Called to collect imports that may be needed
+     *
+     * @param imports
+     * @param templates
+     */
+    protected void collectImports(List<String> imports, List<Template> templates)
+    {
         for (Template template : templates)
         {
             List<String> importsFromProcessor = template.getImports();
@@ -130,9 +186,6 @@ public abstract class Processor
                 if (!imports.contains(imp))
                 {
                     imports.add(imp);
-                    builder.append("import ");
-                    builder.append(imp);
-                    builder.append(";\n");
                 }
             }
         }
