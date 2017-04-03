@@ -12,7 +12,7 @@ import net.minecraftforge.fluids.IFluidTank;
  * @see <a href="https://github.com/BuiltBrokenModding/VoltzEngine/blob/development/license.md">License</a> for what you can and can't do with the code.
  * Created by Dark(DarkGuardsman, Robert) on 4/1/2017.
  */
-@TileWrapped(id = "codeGenTestTileTank", className = "TileEntityWrapperTestTank")
+@TileWrapped(className = ".tile.TileEntityWrapperTestTank")
 @TankProviderWrapped()
 public class TileFluidTank extends TileNode implements ITankProvider
 {

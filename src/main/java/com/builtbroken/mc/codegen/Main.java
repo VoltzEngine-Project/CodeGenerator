@@ -1,7 +1,9 @@
 package com.builtbroken.mc.codegen;
 
+import com.builtbroken.mc.codegen.data.BuildData;
 import com.builtbroken.mc.codegen.processor.Processor;
 import com.builtbroken.mc.codegen.template.Parser;
+import com.builtbroken.mc.codegen.utils.Utils;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -58,7 +60,7 @@ public class Main
                 }
                 else
                 {
-                    file = new File(path);
+                    file = new File(folder);
                 }
                 //Ensure we have a template folder
                 if (!file.exists() || !file.isDirectory())
@@ -92,11 +94,15 @@ public class Main
                 out("output folder is not a directory: " + outputFolder);
                 System.exit(1);
             }
-            if (!outputFolder.delete())
+
+            if(!outputFolder.exists())
             {
-                out("Failed to delete output folder: " + outputFolder);
+                outputFolder.mkdirs();
             }
-            outputFolder.mkdirs();
+            else
+            {
+                Utils.cleanFolder(outputFolder);
+            }
 
             //Ensure we have a target source folder
             if (targetFolder.exists() && targetFolder.isDirectory())
@@ -112,7 +118,7 @@ public class Main
                     {
                         Class clazz = Class.forName(processorEntry);
                         Processor processor = (Processor) clazz.newInstance();
-                        processor.initialized(launchSettings);
+                        processor.initialized(runFolder, launchSettings);
                         processors.add(processor);
                     }
                     catch (ClassNotFoundException e)
@@ -154,7 +160,7 @@ public class Main
                 out("Finalizing data");
                 for (Processor processor : processors)
                 {
-                    processor.finialize(outputFolder);
+                    processor.finalize(outputFolder);
                 }
             }
             else
@@ -237,10 +243,11 @@ public class Main
 
     public static void handleFile(File file, List<Processor> allProcessors, File outputFolder, String spacer) throws IOException
     {
-        String fileClassName = file.getName();
-        if (fileClassName.endsWith(".java"))
+        if (file.getAbsolutePath().endsWith(".java"))
         {
+            String fileClassName = file.getName();
             fileClassName = fileClassName.substring(0, fileClassName.length() - 5);
+
             String classPackage = null;
             List<String> annotations = new ArrayList();
             BufferedReader br = new BufferedReader(new FileReader(file));
@@ -298,7 +305,7 @@ public class Main
             {
                 if (annotationToData.containsKey(processor.annotationKey))
                 {
-                    processor.handleFile(outputFolder, annotationToData, classPackage, fileClassName, spacer);
+                    processor.handleFile(outputFolder, new BuildData(annotationToData, classPackage, fileClassName), spacer);
                 }
             }
             //TODO build list of all generated data to be registered

@@ -1,11 +1,14 @@
 package com.builtbroken.mc.codegen.processor;
 
 import com.builtbroken.mc.codegen.Main;
+import com.builtbroken.mc.codegen.data.BuildData;
 import com.builtbroken.mc.codegen.template.Template;
 
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -20,13 +23,16 @@ public abstract class Processor
 
     /** Name of the annotation that defines this processor should be used */
     public final String annotationKey;
+    /** Name of the annotation that defines what templates to load */
+    public final String templateAnnotationKey;
 
     /**
      * @param annotationKey - needs to be the exact name of the annotation
      */
-    public Processor(String annotationKey)
+    public Processor(String annotationKey, String templateAnnotationKey)
     {
         this.annotationKey = annotationKey;
+        this.templateAnnotationKey = templateAnnotationKey;
     }
 
     /**
@@ -35,22 +41,22 @@ public abstract class Processor
      *
      * @param arguments - map of argument to value
      */
-    public void initialized(HashMap<String, String> arguments)
+    public void initialized(File mainDirectory, HashMap<String, String> arguments)
     {
 
     }
 
     /**
-     * Called to handle a file
+     * Called to handle a file.
+     * <p>
+     * Make sure to call build.
      *
-     * @param outputFolder  - folder to output the file to, this is the global src folder not the exact file
-     * @param annotations   - all annotations processed as name to data map
-     * @param classPackage  - package of the class file that is being processed
-     * @param fileClassName - name of the class file that is being processed
-     * @param spacer        - current spacer for debug output
+     * @param outputFolder - folder to output the file to, this is the global src folder not the exact file
+     * @param buildData    - data about the build process
+     * @param spacer       - current spacer for debug output
      * @throws IOException
      */
-    public abstract void handleFile(File outputFolder, HashMap<String, String> annotations, String classPackage, String fileClassName, String spacer) throws IOException;
+    public abstract void handleFile(File outputFolder, BuildData buildData, String spacer) throws IOException;
 
     /**
      * Called to do any actions that need to wait until all files have
@@ -60,7 +66,7 @@ public abstract class Processor
      *
      * @param outputFolder
      */
-    public void finialize(File outputFolder)
+    public void finalize(File outputFolder)
     {
 
     }
@@ -68,40 +74,65 @@ public abstract class Processor
     /**
      * Called to build the file and write it to disk
      *
-     * @param outputFolder
-     * @param templates
-     * @param classPackage
-     * @param className
-     * @param fileClassName
-     * @param spacer
+     * @param outputFolder - location to store the output file
+     * @param templates    - list of templates to use during building
+     * @param spacer       - spacer to make debug look nice
      */
-    protected void build(File outputFolder, List<Template> templates, String classPackage, String className, String fileClassName, String spacer)
+    protected void build(final File outputFolder, final List<Template> templates, BuildData buildData, final String spacer)
     {
         //Start building file
         StringBuilder builder = new StringBuilder();
 
         //Write top of file notes
-        builder.append("//THIS IS A GENERATED CLASS FILE\n");
+        builder.append("//=======================================================\n");
+        builder.append("//DISCLAIMER: THIS IS A GENERATED CLASS FILE\n");
+        builder.append("//THUS IS PROVIDED 'AS-IS' WITH NO WARRANTY\n");
+        builder.append("//FUNCTIONALITY CAN NOT BE GUARANTIED IN ANY WAY \n");
+        builder.append("//USE AT YOUR OWN RISK \n");
+        builder.append("//-------------------------------------------------------\n");
+        builder.append("//Build date: ");
+        builder.append(LocalDateTime.now().format(DateTimeFormatter.ofPattern("MM-dd-yyyy HH:mm:ss.SSS")));
+        builder.append("\n");
+        builder.append("//Built on: ");
+        builder.append(System.getProperty("user.name"));
+        builder.append("\n");
+        builder.append("//=======================================================\n");
+
+        //Figure out what to use for class name and package path
+        if (buildData.outputClassName.contains("."))
+        {
+            if (!buildData.outputClassName.startsWith("."))
+            {
+                buildData.outputClassPackage = "";
+            }
+            buildData.outputClassPackage += buildData.outputClassName.substring(0, buildData.outputClassName.lastIndexOf("."));
+            buildData.outputClassName = buildData.outputClassName.substring(buildData.outputClassName.lastIndexOf(".") + 1, buildData.outputClassName.length());
+        }
+        //Else name is just a name and will need to be prefixed by package path
+        else
+        {
+            buildData.outputClassPackage = buildData.classPackage;
+        }
 
         //Write package
-        builder.append("package " + classPackage + ";\n");
+        builder.append("package " + buildData.outputClassPackage + ";\n");
         builder.append("\n");
 
         //Write imports
-        createImports(builder, templates, className, fileClassName, classPackage);
+        createImports(builder, templates, buildData);
         builder.append("\n");
 
         //Write class header
-        createClassHeader(builder, className, templates);
+        createClassHeader(builder, templates, buildData);
 
         //Body start
         builder.append("\n{\n");
 
         //Writer constructor
-        createConstructor(builder, className, fileClassName, templates);
+        createConstructor(builder, templates, buildData);
 
         //Write body
-        createBody(builder, templates);
+        createBody(builder, templates, buildData);
 
         //Body end
         builder.append("}");
@@ -109,7 +140,9 @@ public abstract class Processor
         //Write file to disk
         try
         {
-            File outFile = new File(outputFolder, classPackage.replace(".", File.separator) + File.separator + className + ".java");
+            File outFile;
+            //If contains dot the class name starts with a package path
+            outFile = new File(outputFolder, buildData.outputClassPackage.replace(".", File.separator) + File.separator + buildData.outputClassName + ".java");
             Main.out(spacer + "  Writing file to disk, file = " + outFile);
             if (!outFile.getParentFile().exists())
             {
@@ -138,21 +171,18 @@ public abstract class Processor
      *
      * @param builder
      * @param templates
-     * @param className
-     * @param fileClassName
-     * @param classPackage
      */
-    protected void createImports(StringBuilder builder, List<Template> templates, String className, String fileClassName, String classPackage)
+    protected void createImports(StringBuilder builder, List<Template> templates, BuildData buildData)
     {
         //Get imports to use
         final List<String> imports = new ArrayList();
         //Add import to class we are wrapping
-        imports.add(classPackage + fileClassName);
-        collectImports(imports, templates);
+        imports.add(buildData.classPackage + "." + buildData.className);
+        collectImports(imports, templates, buildData);
 
         //Get imports to ignore
         final List<String> ignored = new ArrayList();
-        collectIgnoredImports(ignored, templates);
+        collectIgnoredImports(ignored, templates, buildData);
 
         //TODO ensure all imports are used
 
@@ -161,7 +191,6 @@ public abstract class Processor
         {
             if (!ignored.contains(imp))
             {
-                imports.add(imp);
                 builder.append("import ");
                 builder.append(imp);
                 builder.append(";\n");
@@ -175,7 +204,7 @@ public abstract class Processor
      * @param imports
      * @param templates
      */
-    protected void collectImports(List<String> imports, List<Template> templates)
+    protected void collectImports(List<String> imports, List<Template> templates, BuildData buildData)
     {
         for (Template template : templates)
         {
@@ -197,7 +226,7 @@ public abstract class Processor
      * @param imports   - place to add imports to ignore
      * @param templates - templates to check against
      */
-    protected void collectIgnoredImports(List<String> imports, List<Template> templates)
+    protected void collectIgnoredImports(List<String> imports, List<Template> templates, BuildData buildData)
     {
 
     }
@@ -206,14 +235,13 @@ public abstract class Processor
      * Called to create the class header
      *
      * @param builder
-     * @param className
      * @param templates
      */
-    protected void createClassHeader(StringBuilder builder, String className, List<Template> templates)
+    protected void createClassHeader(StringBuilder builder, List<Template> templates, BuildData buildData)
     {
         //TODO implement annotations
         //Create header
-        builder.append("public class " + className + " extends TileEntityWrapper");
+        builder.append("public class " + buildData.outputClassName + " extends TileEntityWrapper");
 
         //Add implements
         List<String> interfaces = new ArrayList();
@@ -248,11 +276,9 @@ public abstract class Processor
      * Called to create the constructor for the class
      *
      * @param builder
-     * @param className
-     * @param fileClassName
      * @param templates
      */
-    protected void createConstructor(StringBuilder builder, String className, String fileClassName, List<Template> templates)
+    protected void createConstructor(StringBuilder builder, List<Template> templates, BuildData buildData)
     {
 
     }
@@ -263,7 +289,7 @@ public abstract class Processor
      * @param builder
      * @param templates
      */
-    protected void createBody(StringBuilder builder, List<Template> templates)
+    protected void createBody(StringBuilder builder, List<Template> templates, BuildData buildData)
     {
         for (Template template : templates)
         {
@@ -332,7 +358,7 @@ public abstract class Processor
                 Main.out("");
                 Main.out(spacer + "--File: " + file.getName());
                 Main.out(spacer + " |------------------------->");
-                Template template = new Template();
+                Template template = new Template(templateAnnotationKey);
                 try
                 {
 

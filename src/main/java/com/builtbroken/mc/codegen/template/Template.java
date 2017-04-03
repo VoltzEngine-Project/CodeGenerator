@@ -39,6 +39,13 @@ public class Template
     private boolean valid = true;
     private String key;
 
+    public final String annotationKey;
+
+    public Template(String annotationKey)
+    {
+        this.annotationKey = annotationKey;
+    }
+
     /**
      * @param file   - file to load
      * @param spacer - spacer for debug output, makes the messages look nice
@@ -113,7 +120,7 @@ public class Template
             for (String annotation : annotations)
             {
                 Main.out(spacer + "      " + annotation);
-                if (annotation.startsWith("TileWrappedTemplate"))
+                if (annotation.startsWith(annotationKey))
                 {
                     String data = annotation.substring(annotation.indexOf("(") + 1, annotation.length() - 1);
                     key = data.split("=")[1].replace("\"", "").trim();
@@ -122,7 +129,7 @@ public class Template
 
             if (key == null)
             {
-                Main.out(spacer + "Class does not contain " + TileWrappedTemplate.class.getName() + " or the key set was empty");
+                Main.out(spacer + "Class does not contain " + annotationKey + " or the key set was empty");
                 valid = false;
                 return null;
             }
