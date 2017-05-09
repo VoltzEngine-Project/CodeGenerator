@@ -40,10 +40,12 @@ public class Template
     private String key;
 
     public final String annotationKey;
+    public final String extendsCheck;
 
-    public Template(String annotationKey)
+    public Template(String annotationKey, String extendsCheck)
     {
         this.annotationKey = annotationKey;
+        this.extendsCheck = extendsCheck;
     }
 
     /**
@@ -201,7 +203,7 @@ public class Template
             if (classExtending != null)
             {
                 Main.out(spacer + "      " + classExtending);
-                if (!classExtending.equals("TileEntityWrapper"))
+                if (!classExtending.equals(extendsCheck))
                 {
                     Main.out(spacer + "      Error class must extend TileEntityWrapper");
                     valid = false;
