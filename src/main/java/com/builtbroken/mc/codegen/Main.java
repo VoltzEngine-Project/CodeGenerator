@@ -5,6 +5,7 @@ import com.builtbroken.mc.codegen.processor.Processor;
 import com.builtbroken.mc.codegen.template.Parser;
 import com.builtbroken.mc.codegen.utils.Utils;
 
+import java.awt.*;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
@@ -31,8 +32,14 @@ public class Main
         //Load arguments
         HashMap<String, String> launchSettings = loadArgs(args);
 
-        if (launchSettings.containsKey("src") && launchSettings.containsKey("templates") && launchSettings.containsKey("output") && launchSettings.containsKey("processors"))
+        if(launchSettings.containsKey("settings"))
         {
+            //TODO load settings file
+        }
+        else if (launchSettings.containsKey("src") && launchSettings.containsKey("templates") && launchSettings.containsKey("output") && launchSettings.containsKey("processors"))
+        {
+            //TODO migrate to settings object and run object
+
             File runFolder = new File(".");
             File targetFolder;
             List<File> templateFolders = new ArrayList();
@@ -167,6 +174,10 @@ public class Main
             {
                 error("The target folder does not exist. Folder: " + targetFolder);
             }
+        }
+        else if(!GraphicsEnvironment.isHeadless())
+        {
+            //TODO open java FX app allowing creation of settings files
         }
         else
         {
